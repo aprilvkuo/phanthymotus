@@ -73,6 +73,7 @@ MODELS = {
     },
     "ocr_ppocrv6_tiny": {
         "files": ("det.onnx", "rec.onnx", "inference.yml"),
+    },
     "denoise": {
         "url": f"{COS_BASE}/gtcrn_simple.onnx",
         "check_file": "gtcrn_simple.onnx",
