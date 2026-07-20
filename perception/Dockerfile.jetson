@@ -131,21 +131,24 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} sherpa-onnx
 
 # ── Offline ASR model ─────────────────────────────────────────────
 ARG ASR_OFFLINE_MODEL_BASE_URL=http://172.28.4.81:34567/zengzhitao/embodied-ai/official_paraformer
-COPY perception/utils/asr_model_downloader.py /tmp/asr_model_downloader.py
-RUN python3 /tmp/asr_model_downloader.py \
-    --base-url "${ASR_OFFLINE_MODEL_BASE_URL}" \
-    --output-dir /models/sherpa-onnx/asr-offline
+COPY perception/utils/model_downloader.py /tmp/model_downloader.py
+RUN python3 - <<'PY'
+import sys; sys.path.insert(0, "/tmp")
+from model_downloader import ensure_model
+ensure_model("asr_paraformer_offline", "/models/sherpa-onnx/asr-offline",
+             base_url="http://172.28.4.81:34567/zengzhitao/embodied-ai/official_paraformer")
+PY
 
 # ── OCR model (kept outside Git) ──────────────────────────────────
 ARG OCR_MODEL_BASE_URL=http://172.28.4.81:34567/zengzhitao/embodied-ai/ppocrv6-tiny
 ARG OCR_MODEL_FALLBACK_BASE_URL=http://172.28.4.81:34567/zengzhitao/embodied-ai/ocr/ppocrv6-tiny
-COPY perception/utils/ocr_model_downloader.py /tmp/ocr_model_downloader.py
-RUN python3 /tmp/ocr_model_downloader.py \
-    --base-url "${OCR_MODEL_BASE_URL}" \
-    --output-dir /models/ocr/ppocrv6-tiny || \
-    python3 /tmp/ocr_model_downloader.py \
-    --base-url "${OCR_MODEL_FALLBACK_BASE_URL}" \
-    --output-dir /models/ocr/ppocrv6-tiny
+RUN python3 - <<'PY'
+import os, sys; sys.path.insert(0, "/tmp")
+from model_downloader import ensure_model
+ensure_model("ocr_ppocrv6_tiny", "/models/ocr/ppocrv6-tiny",
+             base_url=os.environ["OCR_MODEL_BASE_URL"],
+             fallback_base_url=os.environ.get("OCR_MODEL_FALLBACK_BASE_URL", ""))
+PY
 
 # ── Application code ───────────────────────────────────────────────
 WORKDIR /work

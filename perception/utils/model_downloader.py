@@ -82,8 +82,17 @@ MODELS = {
 }
 
 
-def ensure_model(name: str, model_dir: str, base_url: str = "") -> None:
-    """确保模型存在；缺失时从默认地址或指定根地址下载。"""
+def ensure_model(
+    name: str,
+    model_dir: str,
+    base_url: str = "",
+    fallback_base_url: str = "",
+) -> None:
+    """确保模型存在；缺失时从默认地址或指定根地址下载。
+
+    ``fallback_base_url`` 用于 ``base_url`` 不可达时（如内网镜像切换）的
+    透明重试；仅对多文件模型（``files`` 形式）生效。
+    """
     info = MODELS.get(name)
     if not info:
         raise ValueError(f"Unknown model name: {name}")
@@ -102,18 +111,43 @@ def ensure_model(name: str, model_dir: str, base_url: str = "") -> None:
                 f"[model_downloader] {name}: base_url is required; "
                 "public model fallback is disabled"
             )
-        _download_files(required_files, model_dir, base_url)
-        missing = [
-            path
-            for path in required_files
-            if not os.path.isfile(os.path.join(model_dir, path))
-        ]
-        if missing:
-            raise RuntimeError(
+        last_err: Exception | None = None
+        for url in (base_url, fallback_base_url):
+            if not url:
+                continue
+            try:
+                _download_files(required_files, model_dir, url)
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                log.warning(
+                    "[model_downloader] %s: base_url %s failed: %s",
+                    name,
+                    url,
+                    exc,
+                )
+                # 清理可能残留的不完整文件，避免误判为"已存在"
+                for path in required_files:
+                    tmp = os.path.join(model_dir, path)
+                    if os.path.exists(tmp):
+                        try:
+                            os.unlink(tmp)
+                        except OSError:
+                            pass
+                continue
+            missing = [
+                path
+                for path in required_files
+                if not os.path.isfile(os.path.join(model_dir, path))
+            ]
+            if not missing:
+                return
+            last_err = RuntimeError(
                 f"[model_downloader] {name}: download completed but missing "
                 f"{', '.join(missing)} in {model_dir}"
             )
-        return
+        raise last_err or RuntimeError(
+            f"[model_downloader] {name}: no base_url succeeded"
+        )
 
     check_path = os.path.join(model_dir, info["check_file"])
     if os.path.exists(check_path):
