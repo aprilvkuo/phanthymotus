@@ -100,6 +100,14 @@ if 'CUDAExecutionProvider' not in p:
     warnings.warn('onnxruntime 未检测到 CUDAExecutionProvider，OCR 将回退 CPU: %s' % p)
 PY
 
+# ── 构建期验证 OCR 依赖（避免运行时才报 ImportError） ────────────────
+RUN python3 - <<'PY'
+import cv2, numpy, onnxruntime, pyclipper, yaml  # noqa: F401
+print('OCR deps OK: cv2=%s numpy=%s onnxruntime=%s pyclipper=%s yaml=%s' % (
+    cv2.__version__, numpy.__version__, onnxruntime.__version__,
+    pyclipper.__version__, yaml.__version__))
+PY
+
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     kiss-icp scipy
