@@ -83,15 +83,17 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     pyyaml requests websockets webrtcvad websocket-client dashscope && \
     pip3 install --no-cache-dir --no-deps -i ${PYPI_MIRROR} silero-vad
 
-# ── ONNX Runtime GPU (CUDA) ──────────────────────────────────────
-# Pin numpy + onnxruntime-gpu; assert at build time that the CUDA
-# provider is actually available so we fail fast on broken bases.
+# ── ONNX Runtime (aarch64 用不带 -gpu 后缀的 wheel; 链接 JetPack CUDA) ─
+# NOTE: PyPI 的 onnxruntime-gpu 只发布 x86_64，aarch64 (Jetson) 不存在该包。
+# 这里装通用 aarch64 wheel；如无 CUDA provider，部署时在 assert 处 fail-fast，
+# 届时需改走 PaddleOCR/paddlepaddle-gpu 方案（参见 ocr.py provider 注册表）。
 RUN pip3 uninstall -y onnxruntime onnxruntime-gpu 2>/dev/null || true; \
     pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
-    "numpy==1.26.4" "onnxruntime-gpu==1.23.0" && \
+    "numpy==1.26.4" "onnxruntime==1.23.0" && \
     python3 -c "import onnxruntime as ort; p = ort.get_available_providers(); \
     assert ort.__version__ == '1.23.0', ort.__version__; \
-    assert 'CUDAExecutionProvider' in p, p"
+    if 'CUDAExecutionProvider' not in p: \
+        import warnings; warnings.warn('onnxruntime 未检测到 CUDAExecutionProvider，OCR 将回退 CPU: %s' % p)"
 
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
