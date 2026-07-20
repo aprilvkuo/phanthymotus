@@ -90,10 +90,14 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
 RUN pip3 uninstall -y onnxruntime onnxruntime-gpu 2>/dev/null || true; \
     pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     "numpy==1.26.4" "onnxruntime==1.23.0" && \
-    python3 -c "import onnxruntime as ort; p = ort.get_available_providers(); \
-    assert ort.__version__ == '1.23.0', ort.__version__; \
-    if 'CUDAExecutionProvider' not in p: \
-        import warnings; warnings.warn('onnxruntime 未检测到 CUDAExecutionProvider，OCR 将回退 CPU: %s' % p)"
+    python3 - <<'PY'
+import onnxruntime as ort
+p = ort.get_available_providers()
+assert ort.__version__ == '1.23.0', ort.__version__
+if 'CUDAExecutionProvider' not in p:
+    import warnings
+    warnings.warn('onnxruntime 未检测到 CUDAExecutionProvider，OCR 将回退 CPU: %s' % p)
+PY
 
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
