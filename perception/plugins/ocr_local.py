@@ -41,7 +41,8 @@ def sanitize_bbox(bbox: Iterable[float], width: int, height: int) -> list[int]:
 
 
 class PPOCRv6ONNXAdapter:
-    """使用 ONNX Runtime CPU 执行 PP-OCRv6 Tiny 检测和识别。"""
+    """使用 ONNX Runtime 执行 PP-OCRv6 Tiny 检测和识别。
+    优先使用 GPU (CUDA)，不可用时回退到 CPU。"""
 
     def __init__(self, cfg: dict):
         try:
@@ -109,10 +110,16 @@ class PPOCRv6ONNXAdapter:
         options.intra_op_num_threads = self.num_threads
         options.inter_op_num_threads = 1
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        # 优先 GPU，回退 CPU
+        preferred = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        available = ort.get_available_providers()
+        providers = [p for p in preferred if p in available] or ["CPUExecutionProvider"]
+
         return ort.InferenceSession(
             model_path,
             sess_options=options,
-            providers=["CPUExecutionProvider"],
+            providers=providers,
         )
 
     @staticmethod
