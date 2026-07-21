@@ -34,7 +34,7 @@ RUN if ls /etc/apt/sources.list.d/*.list 1>/dev/null 2>&1; then \
 RUN rm -f /etc/apt/sources.list.d/* && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* && \
     apt-get -o Acquire::AllowInsecureRepositories=true update && \
     apt-get install -y --no-install-recommends --allow-unauthenticated \
-        ffmpeg  && \
+        ffmpeg libffi8 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
@@ -47,9 +47,10 @@ RUN cd /ros_ws && \
     colcon build --packages-select audio_msgs --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # ── Python deps ────────────────────────────────────────────────────
+RUN pip3 uninstall -y opencv-python opencv-python-headless
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     pyyaml requests websockets webrtcvad websocket-client dashscope \
-    onnxruntime pyclipper opencv-python && \
+    onnxruntime pyclipper opencv-python-headless==4.5.5.64 && \
     pip3 install --no-cache-dir --no-deps -i ${PYPI_MIRROR} silero-vad
 
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
@@ -118,7 +119,7 @@ RUN ["/bin/bash", "-c", \
     "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
      source /opt/ros/humble/install/setup.bash && \
      source /ros_ws/install/setup.bash" ]
-     
+
 RUN echo "DEBUG_TIME=${DEBUG_TIME}" && \
     python3 -c "\
 import cv2; \
