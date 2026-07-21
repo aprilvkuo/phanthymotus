@@ -30,10 +30,11 @@ RUN if ls /etc/apt/sources.list.d/*.list 1>/dev/null 2>&1; then \
     fi
 
 # ── System deps ────────────────────────────────────────────────────
+
 RUN rm -f /etc/apt/sources.list.d/* && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* && \
     apt-get -o Acquire::AllowInsecureRepositories=true update && \
     apt-get install -y --no-install-recommends --allow-unauthenticated \
-        ffmpeg python3-opencv && \
+        ffmpeg  && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} colcon-common-extensions && \
@@ -48,7 +49,7 @@ RUN cd /ros_ws && \
 # ── Python deps ────────────────────────────────────────────────────
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     pyyaml requests websockets webrtcvad websocket-client dashscope \
-    onnxruntime pyclipper && \
+    onnxruntime pyclipper opencv-python && \
     pip3 install --no-cache-dir --no-deps -i ${PYPI_MIRROR} silero-vad
 
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
@@ -56,15 +57,7 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     kiss-icp scipy
 
 # ── VOP deps (YOLOv8-World object detection) ─────────────────────
-# JetPack 5 / Ubuntu 20.04 does not provide libffi.so.8.  Use the
-# Jetson-packaged OpenCV instead of a PyPI OpenCV wheel that requires it.
-RUN pip3 uninstall -y \
-        opencv-python opencv-python-headless \
-        opencv-contrib-python opencv-contrib-python-headless || true && \
-    rm -rf \
-        /usr/local/lib/python3.8/dist-packages/cv2 \
-        /usr/local/lib/python3.8/dist-packages/opencv_python*.dist-info \
-        /usr/local/lib/python3.8/dist-packages/opencv_contrib_python*.dist-info
+
 
 # Fix broken system cv2 __init__.py (mat_wrapper circular import on Jetson)
 RUN python3 -c "import cv2" 2>/dev/null || { \
@@ -117,6 +110,72 @@ RUN find /ros_ws/install -name "site-packages" -type d > /usr/local/lib/python3.
 # ROS2 shared libraries（audio_msgs .so 等）
 ENV LD_LIBRARY_PATH="/ros_ws/install/audio_msgs/lib:/opt/ros/humble/install/lib:${LD_LIBRARY_PATH}"
 ENV AMENT_PREFIX_PATH="/ros_ws/install/audio_msgs:/opt/ros/humble/install"
+
+# ── OCR dependency check ───────────────────────────────────────────
+RUN python3 - <<'PY'
+import sys
+import subprocess
+
+print("========== Python ==========")
+print(sys.version)
+
+print("\n========== OCR Import Test ==========")
+
+try:
+    import cv2
+    import numpy
+    import onnxruntime
+    import pyclipper
+    import yaml
+
+    print("cv2:", cv2.__version__, cv2.__file__)
+    print("numpy:", numpy.__version__)
+    print("onnxruntime:", onnxruntime.__version__)
+    print("providers:", onnxruntime.get_available_providers())
+    print("pyclipper:", pyclipper.__version__)
+    print("yaml:", yaml.__version__)
+
+    print("\nOCR dependencies OK")
+
+except ImportError as exc:
+    print("\nOCR dependencies FAILED")
+    raise RuntimeError(
+        "local_ppocr requires numpy, opencv, onnxruntime, pyclipper and pyyaml"
+    ) from exc
+
+
+print("\n========== libffi ==========")
+
+subprocess.run(
+    "ldconfig -p | grep libffi || true",
+    shell=True
+)
+
+subprocess.run(
+    "find /usr /usr/local -name 'libffi.so*' 2>/dev/null || true",
+    shell=True
+)
+
+print("\n========== Check libffi.so.8 dependency ==========")
+
+subprocess.run(
+    r"""
+find /usr/local/lib/python3.8 /usr/lib/python3.8 \
+-type f -name "*.so*" 2>/dev/null |
+while read f; do
+    if readelf -d "$f" 2>/dev/null | grep -q "libffi.so.8"; then
+        echo "FOUND:"
+        echo "$f"
+        readelf -d "$f" | grep libffi
+    fi
+done
+""",
+    shell=True
+)
+
+PY
+
+
 
 CMD ["/bin/bash", "-c", \
     "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
