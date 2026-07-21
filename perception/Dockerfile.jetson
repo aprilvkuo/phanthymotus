@@ -112,70 +112,27 @@ ENV LD_LIBRARY_PATH="/ros_ws/install/audio_msgs/lib:/opt/ros/humble/install/lib:
 ENV AMENT_PREFIX_PATH="/ros_ws/install/audio_msgs:/opt/ros/humble/install"
 
 # ── OCR dependency check ───────────────────────────────────────────
-RUN python3 - <<'PY'
-import sys
-import subprocess
+ARG DEBUG_TIME=0
 
-print("========== Python ==========")
-print(sys.version)
-
-print("\n========== OCR Import Test ==========")
-
-try:
-    import cv2
-    import numpy
-    import onnxruntime
-    import pyclipper
-    import yaml
-
-    print("cv2:", cv2.__version__, cv2.__file__)
-    print("numpy:", numpy.__version__)
-    print("onnxruntime:", onnxruntime.__version__)
-    print("providers:", onnxruntime.get_available_providers())
-    print("pyclipper:", pyclipper.__version__)
-    print("yaml:", yaml.__version__)
-
-    print("\nOCR dependencies OK")
-
-except ImportError as exc:
-    print("\nOCR dependencies FAILED")
-    raise RuntimeError(
-        "local_ppocr requires numpy, opencv, onnxruntime, pyclipper and pyyaml"
-    ) from exc
-
-
-print("\n========== libffi ==========")
-
-subprocess.run(
-    "ldconfig -p | grep libffi || true",
-    shell=True
-)
-
-subprocess.run(
-    "find /usr /usr/local -name 'libffi.so*' 2>/dev/null || true",
-    shell=True
-)
-
-print("\n========== Check libffi.so.8 dependency ==========")
-
-subprocess.run(
-    r"""
-find /usr/local/lib/python3.8 /usr/lib/python3.8 \
--type f -name "*.so*" 2>/dev/null |
-while read f; do
-    if readelf -d "$f" 2>/dev/null | grep -q "libffi.so.8"; then
-        echo "FOUND:"
-        echo "$f"
-        readelf -d "$f" | grep libffi
-    fi
-done
-""",
-    shell=True
-)
-
-PY
-
-
+RUN echo "DEBUG_TIME=${DEBUG_TIME}" && \
+    python3 -c "\
+import cv2; \
+import numpy; \
+import onnxruntime; \
+import pyclipper; \
+import yaml; \
+import sys; \
+print('========== Python =========='); \
+print(sys.version); \
+print('cv2:', cv2.__version__, cv2.__file__); \
+print('numpy:', numpy.__version__); \
+print('onnxruntime:', onnxruntime.__version__); \
+print('providers:', onnxruntime.get_available_providers()); \
+print('pyclipper:', pyclipper.__version__); \
+print('yaml:', yaml.__version__); \
+print('OCR dependencies OK')" && \
+    echo "========== libffi ==========" && \
+    ldconfig -p | grep libffi || true
 
 CMD ["/bin/bash", "-c", \
     "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
