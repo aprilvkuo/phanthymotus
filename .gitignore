@@ -25,6 +25,7 @@ perception/models/ppocr-v6-tiny/*
 # Media (runtime captures)
 *.jpg
 *.png
+!perception/tests/fixtures/*.png
 !docs/images/*.png
 !docs/images/*.jpg
 

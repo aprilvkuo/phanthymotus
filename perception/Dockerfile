@@ -4,6 +4,7 @@ ARG ROS_BASE_IMAGE=bj-warehouse.tencentcloudcr.com/phanthy-motus/ros-base:latest
 ARG OCR_MODEL_BASE_URL=http://172.28.4.81:8200/ppocr-v6-tiny
 FROM ${ROS_BASE_IMAGE}
 ARG PYPI_MIRROR OCR_MODEL_BASE_URL
+ARG RUN_OCR_E2E_TEST=1
 
 ENV OCR_MODEL_BASE_URL=${OCR_MODEL_BASE_URL}
 
@@ -46,6 +47,15 @@ COPY utils/     /work/utils/
 COPY config.yaml /work/config.yaml
 COPY config/fastdds_large_message.xml /opt/phanthy-motus/config/fastdds_large_message.xml
 COPY deploy/     /deploy/
+COPY tests/test_local_ocr.py /work/tests/test_local_ocr.py
+COPY tests/fixtures/ocr_sample.png /work/tests/fixtures/ocr_sample.png
+
+RUN if [ "${RUN_OCR_E2E_TEST}" = "1" ]; then \
+        python3 -u -m unittest discover \
+            -s /work/tests -p "test_local_ocr.py" -v; \
+    else \
+        echo "Skipping OCR end-to-end build test (RUN_OCR_E2E_TEST=${RUN_OCR_E2E_TEST})"; \
+    fi
 
 EXPOSE 15720
 EXPOSE 15721

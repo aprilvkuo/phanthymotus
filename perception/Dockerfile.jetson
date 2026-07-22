@@ -15,6 +15,7 @@ ARG BASE_IMAGE=bj-warehouse.tencentcloudcr.com/phanthy-motus/jetson-base:jp511-t
 ARG OCR_MODEL_BASE_URL=http://172.28.4.81:8200/ppocr-v6-tiny
 FROM ${BASE_IMAGE}
 ARG PYPI_MIRROR APT_MIRROR OCR_MODEL_BASE_URL
+ARG RUN_OCR_E2E_TEST=1
 
 ENV OCR_MODEL_BASE_URL=${OCR_MODEL_BASE_URL}
 
@@ -100,6 +101,8 @@ COPY perception/plugins/   /work/plugins/
 COPY perception/utils/     /work/utils/
 COPY perception/config.yaml /work/config.yaml
 COPY perception/config/fastdds_large_message.xml /opt/phanthy-motus/config/fastdds_large_message.xml
+COPY perception/tests/test_local_ocr.py /work/tests/test_local_ocr.py
+COPY perception/tests/fixtures/ocr_sample.png /work/tests/fixtures/ocr_sample.png
 
 EXPOSE 15720
 EXPOSE 15721
@@ -139,6 +142,13 @@ print('yaml:', yaml.__version__); \
 print('OCR dependencies OK')" && \
     echo "========== libffi ==========" && \
     ldconfig -p | grep libffi || true
+
+RUN if [ "${RUN_OCR_E2E_TEST}" = "1" ]; then \
+        python3 -u -m unittest discover \
+            -s /work/tests -p "test_local_ocr.py" -v; \
+    else \
+        echo "Skipping OCR end-to-end build test (RUN_OCR_E2E_TEST=${RUN_OCR_E2E_TEST})"; \
+    fi
 
 CMD ["/bin/bash", "-c", \
     "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
