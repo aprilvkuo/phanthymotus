@@ -118,10 +118,7 @@ ENV AMENT_PREFIX_PATH="/ros_ws/install/audio_msgs:/opt/ros/humble/install"
 # ── OCR dependency check ───────────────────────────────────────────
 ARG DEBUG_TIME=0
 
-RUN ["/bin/bash", "-c", \
-    "export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
-     source /opt/ros/humble/install/setup.bash && \
-     source /ros_ws/install/setup.bash" ]
+
 
 RUN echo "DEBUG_TIME=${DEBUG_TIME}" && \
     python3 -c "\
@@ -143,7 +140,10 @@ print('OCR dependencies OK')" && \
     echo "========== libffi ==========" && \
     ldconfig -p | grep libffi || true
 
-RUN if [ "${RUN_OCR_E2E_TEST}" = "1" ]; then \
+RUN export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
+    source /opt/ros/humble/install/setup.bash && \
+    source /ros_ws/install/setup.bash && \
+    if [ "${RUN_OCR_E2E_TEST}" = "1" ]; then \
         python3 -u -m unittest discover \
             -s /work/tests -p "test_local_ocr.py" -v; \
     else \
