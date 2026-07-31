@@ -1,0 +1,10 @@
+# Jetson(Orin-16G) 依赖，配合 JetPack
+numpy>=1.23
+opencv-python-headless>=4.7
+pyyaml>=6.0
+onnx>=1.13
+onnxruntime>=1.15
+tensorrt>=8.5
+pynvml>=11.0
+# ROS2 / rclpy 由系统 apt 安装，不在 pip
+# torch 使用 JetPack 提供的预编译 wheel，请勿用 pip 覆盖

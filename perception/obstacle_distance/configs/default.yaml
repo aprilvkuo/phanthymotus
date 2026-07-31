@@ -1,0 +1,39 @@
+# 默认配置：单目前向最近可通行障碍物距离(NOD)基线
+# 所有相对路径均相对本配置文件所在目录(perception/obstacle_distance)解析。
+# 配置为超参单一来源，代码中禁止硬编码。
+
+# ---------- 模型与输入 ----------
+input_size: 224                       # 网络输入边长(正方形)
+encoder_name: mobilenet_v3_small      # 编码器(基线仅支持该值)
+depth_range: [0.1, 30.0]              # 深度物理范围(米)，输出 clamp 到此区间
+
+# ---------- 可通行区域(归一化比例，相对 224x224) ----------
+passable_region:
+  horizon_row: 0.55                   # 地平线在图像中的纵向位置(从上往下比例)
+  corridor_x: [0.25, 0.75]            # 前向走廊水平带宽(左右比例)
+
+# ---------- 预处理 ImageNet 统计量 ----------
+imagenet_mean: [0.485, 0.456, 0.406]
+imagenet_std: [0.229, 0.224, 0.225]
+
+# ---------- 无障碍判定 ----------
+# 可通行区域内最小深度 >= 该阈值(等于远裁剪)时视为开阔/无障碍 -> 返回 +inf/False
+obstacle_distance_threshold: 30.0
+
+# ---------- 模型权重 / 引擎路径(相对项目根，走 juicefs 拉取) ----------
+ckpt_path: models/ckpt.pt
+onnx_path: models/model.onnx
+trt_path: models/model.trt
+
+# ---------- 运行 ----------
+backend: torch                        # torch | onnx | trt
+device: cuda                          # cpu | cuda
+seed: 42                              # 全局随机种子
+
+# ---------- 训练超参 ----------
+train:
+  epochs: 20
+  batch_size: 16
+  learning_rate: 1.0e-3
+  lambda_scale_invariant: 0.5
+  num_samples: 2000
