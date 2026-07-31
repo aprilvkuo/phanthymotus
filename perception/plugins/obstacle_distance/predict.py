@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Judgeflow entry point for the Nearest Obstacle Distance model.
+"""Judgeflow entry point for the Nearest Obstacle Distance (NOD) model.
 
 This is the stable interface the leaderboard is expected to call. It wraps the
 `model` package so the internal implementation can evolve without breaking the
 submission contract.
 
+No training needed: the model uses an open-source pretrained monocular depth
+backbone (MiDaS small by default). See model/config.py / README.md.
+
 Assumed judgeflow contract (see README.md for the full assumption list):
     import predict
-    distance_m = predict.predict(rgb_uint8_hwc)   # np.ndarray (H,W,3) RGB 0-255
-    distance_m = predict.predict_from_path("frame.jpg")
+    value = predict.predict(rgb_uint8_hwc)        # np.ndarray (H,W,3) RGB 0-255
+    value = predict.predict_from_path("frame.jpg")
+
+Units: relative inverse-depth units by default (metric_mode="relative").
+Set metric_mode="pinhole_ground" in model/config.py (with camera params) for
+a rule-based meter estimate. The return type is always a float.
 
 CLI:
     python predict.py --image frame.jpg
@@ -18,31 +25,43 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 import numpy as np
 
 try:
-    from model import ModelConfig, ObstacleDistancePredictor, RuntimeConfig
+    from model import ModelConfig, load_predictor
 except ImportError:  # when imported as plugins.obstacle_distance.predict
-    from .model import ModelConfig, ObstacleDistancePredictor, RuntimeConfig
+    from .model import ModelConfig, load_predictor
 
 
-_PREDICTOR: ObstacleDistancePredictor | None = None
+_PREDICTOR = None
 
 
-def _get_predictor(model_dir: str | None = None) -> ObstacleDistancePredictor:
+def _default_weights_path(model_dir: str | None) -> str | None:
+    if model_dir:
+        p = os.path.join(model_dir, "obstacle_distance_backbone.pt")
+        if os.path.exists(p):
+            return p
+    # phanthymotus production mount
+    p = os.path.join("/models/obstacle_distance", "obstacle_distance_backbone.pt")
+    if os.path.exists(p):
+        return p
+    return None
+
+
+def _get_predictor(model_dir: str | None = None):
     global _PREDICTOR
     if _PREDICTOR is None:
-        rt = RuntimeConfig()
-        if model_dir:
-            rt.model_dir = model_dir
-        _PREDICTOR = ObstacleDistancePredictor(rt=rt)
+        cfg = ModelConfig()
+        wp = _default_weights_path(model_dir)
+        _PREDICTOR = load_predictor(cfg, weights_path=wp)
     return _PREDICTOR
 
 
 def predict(image_rgb: np.ndarray, model_dir: str | None = None) -> float:
-    """Nearest Obstacle Distance in meters for one RGB frame."""
+    """Nearest Obstacle Distance for one RGB frame (see module docstring)."""
     return _get_predictor(model_dir).predict(image_rgb)
 
 
@@ -62,9 +81,9 @@ def main(argv=None):
 
     dist = predict_from_path(args.image, model_dir=args.model_dir)
     if args.json:
-        print(json.dumps({"nearest_obstacle_distance_m": dist}))
+        print(json.dumps({"nearest_obstacle_distance": dist}))
     else:
-        print(f"nearest_obstacle_distance_m = {dist:.3f}")
+        print(f"nearest_obstacle_distance = {dist:.4f}")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -41,7 +42,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import String
 
-from .model import ModelConfig, ObstacleDistancePredictor, RuntimeConfig
+from .model import ModelConfig, ObstacleDistancePredictor, load_predictor
 
 log = logging.getLogger(__name__)
 
@@ -65,9 +66,11 @@ TOOLS = [
         "name": "nearest_obstacle_distance",
         "type": "processor",
         "description": (
-            "Estimate the distance (meters) to the nearest obstacle directly ahead "
-            "of the robot using the front camera. Returns a float in "
-            "[min_depth, max_depth]; max_depth means the path is clear."
+            "Estimate the distance to the nearest obstacle directly ahead of the robot "
+            "using the front camera. Uses an open-source pretrained monocular depth model "
+            "(no training) + rule-based ROI post-processing. Returns a relative distance "
+            "value by default; set metric_mode='pinhole_ground' in model/config.py (with camera "
+            "params) for a rule-based meter estimate."
         ),
         "inputSchema": {
             "type": "object",
@@ -226,9 +229,13 @@ class ObstacleDistancePlugin:
         with self._predictor_lock:
             if self._predictor is not None:
                 return
-            rt = RuntimeConfig()
-            rt.model_dir = self._model_dir
-            self._predictor = ObstacleDistancePredictor(rt=rt)
+            cfg = ModelConfig()
+            wp = os.path.join(self._model_dir, "obstacle_distance_backbone.pt")
+            if not os.path.exists(wp):
+                wp = os.path.join("/models/obstacle_distance", "obstacle_distance_backbone.pt")
+            if not os.path.exists(wp):
+                wp = None
+            self._predictor = load_predictor(cfg, weights_path=wp)
 
     def _start_node(self, node_key: str, input_topic: str):
         icfg = self._instance_configs.get(node_key, {})

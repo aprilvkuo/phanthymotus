@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""Local sanity benchmark for the metric pipeline.
+"""Local self-check for the Nearest Obstacle Distance model.
 
-We do NOT have the real leaderboard data here, so this script validates that:
-  1. the model builds and has < 30M params,
-  2. a forward pass + predict() runs end-to-end,
-  3. the Nearest-Obstacle-Distance metric (MAE / RMSE) computes correctly
-     against a synthetic ground truth.
+Validates, WITHOUT the real leaderboard data:
+  1. the open-source backbone loads and has < 30M params (hard limit),
+  2. a forward pass + predict() runs end-to-end on a real image,
+  3. the produced depth map has structure (nearer pixels -> larger inverse
+     depth) in the central frontal ROI.
 
-Replace `make_synthetic()` with a real data loader (depth + frontal-obstacle
-label) to turn this into the actual training/eval harness. The metric math is
-identical to what the leaderboard should report.
+Pass --pinhole to also exercise the rule-based metric (meters) path.
 """
 from __future__ import annotations
 
@@ -21,59 +19,52 @@ import numpy as np
 from model import ModelConfig, ObstacleDistancePredictor
 
 
-def make_synthetic(rng: np.random.Generator, h: int = 256, w: int = 320):
-    """Synthetic RGB + ground-truth nearest distance.
-
-    We put a bright 'obstacle' blob in the central frontal ROI at a random
-    distance, and a far background everywhere else. The true nearest distance
-    is exactly the value we embed.
-    """
-    img = np.full((h, w, 3), 120, dtype=np.uint8)          # grey background
-    true_dist = float(rng.uniform(0.3, 8.0))
-    # closer obstacle -> larger, brighter blob (a crude stand-in for real depth)
-    size = int(40 * (1.0 / true_dist))
-    cy, cx = h // 2, w // 2
-    y0, y1 = max(0, cy - size), min(h, cy + size)
-    x0, x1 = max(0, cx - size), min(w, cx + size)
-    img[y0:y1, x0:x1] = rng.integers(200, 255, size=(y1 - y0, x1 - x0, 3), dtype=np.uint8)
-    return img, true_dist
-
-
-def metric(preds: list[float], gts: list[float]):
-    preds = np.asarray(preds, dtype=np.float64)
-    gts = np.asarray(gts, dtype=np.float64)
-    mae = float(np.mean(np.abs(preds - gts)))
-    rmse = float(np.sqrt(np.mean((preds - gts) ** 2)))
-    return {"mae_m": mae, "rmse_m": rmse, "n": int(len(preds))}
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=16, help="number of synthetic samples")
-    ap.add_argument("--model-dir", default=None)
+    ap.add_argument("--n", type=int, default=4, help="number of inference runs")
+    ap.add_argument("--image", default="/tmp/od_test/synth.png",
+                    help="image to run on (optional)")
+    ap.add_argument("--pinhole", action="store_true",
+                    help="also exercise metric_mode='pinhole_ground'")
+    ap.add_argument("--backbone", default="midas_small")
     args = ap.parse_args(argv)
 
-    rng = np.random.default_rng(0)
-    cfg = ModelConfig()
-    pred = ObstacleDistancePredictor(cfg=cfg, rt=None)
-    if args.model_dir:
-        from model import RuntimeConfig
-        pred = ObstacleDistancePredictor(cfg=cfg, rt=RuntimeConfig())
-        pred.rt.model_dir = args.model_dir
+    cfg = ModelConfig(backbone=args.backbone)
+    pred = ObstacleDistancePredictor(cfg=cfg)
 
-    print(f"parameter count = {pred.count_parameters():,}  (limit < 30,000,000)")
-    assert pred.count_parameters() < 30_000_000, "model exceeds 30M param limit!"
+    nparams = pred.num_params
+    print(f"backbone          : {args.backbone}")
+    print(f"parameter count   : {nparams:,}  (limit < 30,000,000 -> "
+          f"{'OK' if nparams < 30_000_000 else 'FAIL'})")
+    assert nparams < 30_000_000, "model exceeds 30M param limit!"
 
-    preds, gts = [], []
+    from PIL import Image
+    img = np.asarray(Image.open(args.image).convert("RGB"))
+
+    import time
+    t0 = time.time()
     for _ in range(args.n):
-        img, gt = make_synthetic(rng, *cfg.img_size)
-        preds.append(pred.predict(img))
-        gts.append(gt)
+        inv = pred.predict_depth(img)
+    dt = (time.time() - t0) / args.n
 
-    res = metric(preds, gts)
-    print("synthetic benchmark (UNTESTED baseline — expects trained weights for real numbers):")
-    print(f"  {res}")
-    print("OK: end-to-end inference + metric pipeline run successfully.")
+    H, W = inv.shape
+    y0, y1 = int(H * cfg.horizon_row_frac), int(H * cfg.roi_bottom_frac)
+    c0, c1 = int(W * (0.5 - cfg.roi_width_frac / 2)), int(W * (0.5 + cfg.roi_width_frac / 2))
+    roi = inv[y0:y1, c0:c1]
+    print(f"image             : {img.shape}  depth map {inv.shape}")
+    print(f"avg infer time    : {dt*1000:.1f} ms/frame (CPU; Jetson+TRT is faster)")
+    print(f"ROI inv-depth     : min={roi.min():.3f} mean={roi.mean():.3f} max={roi.max():.3f}")
+    print(f"NOD (relative)    : {pred.predict(img):.4f}")
+    # Sanity: a real depth map should not be flat.
+    assert roi.std() > 1e-3, "depth map looks flat — backbone may have failed"
+    print("OK: end-to-end inference + depth structure check passed.")
+
+    if args.pinhole:
+        cfg2 = ModelConfig(backbone=args.backbone, metric_mode="pinhole_ground",
+                           cam_height_m=0.6, horizon_row_frac=0.45)
+        pred2 = ObstacleDistancePredictor(cfg=cfg2)
+        print(f"NOD (pinhole m)   : {pred2.predict(img):.3f} m  (rule-based, camera-dependent)")
+
     return 0
 
 
