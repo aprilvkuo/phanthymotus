@@ -1,0 +1,23 @@
+# Never commit large files / weights / caches.
+# Benchmark rule: no file > 1MB; model weights live on juicefs.
+.cache/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.weights
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+demo/*.npy
+demo/*.png
+demo/*.jpg
+# local data
+data/
+*.npy
+*.npz
+# env
+.venv/
+venv/
+.env

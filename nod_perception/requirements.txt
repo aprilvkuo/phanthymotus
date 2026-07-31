@@ -1,0 +1,8 @@
+# Python deps. The geometric (default) path needs only numpy.
+# torch is OPTIONAL and only required if you train/use the learned model.
+numpy>=1.23
+# Optional (learned mode / training):
+# torch>=2.1
+# torchvision>=0.16
+# opencv-python-headless  # for image-based depth loading (alternative to PIL)
+# Pillow
