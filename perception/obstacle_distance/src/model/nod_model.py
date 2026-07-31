@@ -108,7 +108,10 @@ class NODModel:
         return "cpu"
 
     def _preprocess(self, rgb_np: np.ndarray):
-        from ..preprocess import preprocess
+        try:
+            from preprocess import preprocess
+        except ImportError:  # pragma: no cover
+            from ..preprocess import preprocess
 
         cfg = self.config
         return preprocess(

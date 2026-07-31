@@ -1,8 +1,7 @@
-"""数据集测试（torch 相关自动跳过；合成数据纯 numpy 可运行）。"""
+"""数据集测试（合成数据纯 numpy 可运行，无需 torch）。"""
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
 from src.config import Config  # noqa: E402
 from src.data.dataset import NODDataset  # noqa: E402
 from src.data.synthetic import SyntheticSceneGenerator  # noqa: E402

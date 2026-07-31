@@ -7,8 +7,9 @@ def test_letterbox_shape_and_pad():
     img = np.zeros((100, 300, 3), dtype=np.uint8)
     out = letterbox_resize(img, 224, [0.485, 0.456, 0.406])
     assert out.shape == (224, 224, 3)
-    # pad 区域应等于 ImageNet 均值(uint8 ≈ 123,116,104)
-    assert out[0, 0].tolist() == [123, 116, 104]
+    # pad 区域应等于 ImageNet 均值按 round(v*255) 回填(uint8 = [124,116,104])
+    pad_value = [int(round(v * 255)) for v in [0.485, 0.456, 0.406]]
+    assert out[0, 0].tolist() == pad_value
 
 
 def test_letterbox_keeps_content_centered():

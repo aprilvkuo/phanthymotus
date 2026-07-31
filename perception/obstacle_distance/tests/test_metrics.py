@@ -8,9 +8,10 @@ def test_mae():
 
 
 def test_rmse():
+    # RMSE = sqrt(mean((pred-gt)^2)); 误差 [0, -2] -> 平方 [0, 4] -> 均值 2 -> sqrt(2)
     pred = np.array([0.0, 0.0])
     gt = np.array([0.0, 2.0])
-    assert abs(rmse(pred, gt) - 1.0) < 1e-9
+    assert abs(rmse(pred, gt) - np.sqrt(2.0)) < 1e-9
 
 
 def test_delta_basic():

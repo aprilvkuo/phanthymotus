@@ -15,7 +15,8 @@ def _resize(img: np.ndarray, size_wh: tuple) -> np.ndarray:
     try:
         import cv2
 
-        return cv2.resize(img, size_wh, interpolation=cv2.INTER_LINEAR)
+        # cv2.resize 的 dsize 为 (width, height)；size_wh 约定为 (height, width)，故交换
+        return cv2.resize(img, (size_wh[1], size_wh[0]), interpolation=cv2.INTER_LINEAR)
     except Exception:
         h, w = img.shape[:2]
         nh, nw = size_wh
