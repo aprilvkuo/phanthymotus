@@ -71,12 +71,16 @@ def package_check(cfg: NODConfig) -> dict:
     """Sanity check before submission: no >1MB files committed, weights external.
 
     Mirrors what git will actually commit by honoring .gitignore, so generated
-    demo artifacts / caches don't produce false positives.
+    demo artifacts / caches don't produce false positives. VCS / cache dirs
+    (.git, .cache, __pycache__) are pruned from the walk up front.
     """
     report = {"oversized_files": [], "weights_external": True}
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     patterns = _load_gitignore(root)
-    for dp, _, fns in os.walk(root):
+    skip_dirs = {".git", ".cache", "__pycache__"}
+    for dp, dirnames, fns in os.walk(root):
+        # prune VCS/cache dirs so we never descend into fork_repo/.git etc.
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
         for fn in fns:
             fp = os.path.join(dp, fn)
             rel = os.path.relpath(fp, root)
