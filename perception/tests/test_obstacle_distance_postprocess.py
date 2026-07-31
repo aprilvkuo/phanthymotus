@@ -2,10 +2,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from plugins.obstacle_distance.postprocess import (
-    infer_scene,
     indoor_distance,
+    infer_scene,
     outdoor_distance,
 )
 from plugins.obstacle_distance.types import Detection, Scene

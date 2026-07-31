@@ -23,10 +23,12 @@ def ensure_model_file(
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f"{target.name}.{os.getpid()}.part")
     try:
-        with urllib.request.urlopen(url, timeout=120) as response:
-            with temporary.open("wb") as output:
-                while chunk := response.read(1024 * 1024):
-                    output.write(chunk)
+        with (
+            urllib.request.urlopen(url, timeout=120) as response,
+            temporary.open("wb") as output,
+        ):
+            while chunk := response.read(1024 * 1024):
+                output.write(chunk)
 
         actual = _file_sha256(temporary)
         if expected is not None and actual != expected:

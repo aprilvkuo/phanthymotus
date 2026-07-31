@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +49,7 @@ class ObstacleDistanceEstimator:
         self._depth_backend = depth_backend
         self._detector_backend = detector_backend
         self._config = config or EstimatorConfig()
+        self._inference_lock = threading.Lock()
 
     def estimate(
         self,
@@ -56,6 +58,14 @@ class ObstacleDistanceEstimator:
         scene: str | Scene | None = None,
     ) -> DistanceEstimate:
         resolved_scene = infer_scene(source_name, scene)
+        with self._inference_lock:
+            return self._estimate_locked(image, resolved_scene)
+
+    def _estimate_locked(
+        self,
+        image: np.ndarray,
+        resolved_scene: Scene,
+    ) -> DistanceEstimate:
         try:
             depth = self._depth_backend.predict(image, resolved_scene)
             if resolved_scene is Scene.INDOOR:
@@ -87,7 +97,8 @@ class ObstacleDistanceEstimator:
                 degraded=True,
                 reason="检测器未找到有效障碍物，已使用中心通行区深度",
             )
-        except Exception as exc:
+        # 推理是机器人安全边界，第三方后端异常必须转换为有限保守距离。
+        except Exception as exc:  # noqa: BLE001
             return DistanceEstimate(
                 distance_m=self._config.fallback_distance_m,
                 scene=resolved_scene,

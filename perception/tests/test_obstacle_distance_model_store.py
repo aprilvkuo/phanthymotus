@@ -1,9 +1,10 @@
 import hashlib
+import urllib.error
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
-
 from plugins.obstacle_distance.backends import UltralyticsDetectorBackend
 from plugins.obstacle_distance.model_store import ensure_model_file
 
@@ -45,7 +46,7 @@ def test_failed_refresh_keeps_existing_model(tmp_path: Path) -> None:
     destination.write_bytes(b"known-good")
     missing = tmp_path / "missing.bin"
 
-    with pytest.raises(Exception):
+    with pytest.raises(urllib.error.URLError):
         ensure_model_file(
             missing.as_uri(),
             destination,
@@ -63,7 +64,7 @@ def test_ultralytics_backend_lazily_maps_detection_results() -> None:
 
     class FakeResult:
         boxes = FakeBoxes()
-        names = {2: "car"}
+        names: ClassVar[dict[int, str]] = {2: "car"}
 
     class FakeModel:
         def __call__(self, image, **kwargs):
@@ -89,3 +90,48 @@ def test_ultralytics_backend_lazily_maps_detection_results() -> None:
     assert detections[0].class_name == "car"
     assert detections[0].confidence == pytest.approx(0.75)
     assert detections[0].x2 == pytest.approx(10.0)
+
+
+def test_ultralytics_backend_downloads_weight_only_on_first_detection(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.pt"
+    destination = tmp_path / "models" / "detector.pt"
+    source.write_bytes(b"detector")
+
+    class EmptyModel:
+        def __call__(self, image, **kwargs):
+            return []
+
+    backend = UltralyticsDetectorBackend(
+        str(destination),
+        model_url=source.as_uri(),
+        model_sha256=_sha256(b"detector"),
+        model_factory=lambda path: EmptyModel(),
+    )
+
+    assert not destination.exists()
+    assert backend.detect(np.zeros((8, 8, 3), dtype=np.uint8)) == []
+    assert destination.read_bytes() == b"detector"
+
+
+def test_ultralytics_backend_replaces_corrupt_cached_weight(tmp_path: Path) -> None:
+    source = tmp_path / "source.pt"
+    destination = tmp_path / "models" / "detector.pt"
+    source.write_bytes(b"detector")
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"corrupt")
+
+    class EmptyModel:
+        def __call__(self, image, **kwargs):
+            return []
+
+    backend = UltralyticsDetectorBackend(
+        str(destination),
+        model_url=source.as_uri(),
+        model_sha256=_sha256(b"detector"),
+        model_factory=lambda path: EmptyModel(),
+    )
+
+    assert backend.detect(np.zeros((8, 8, 3), dtype=np.uint8)) == []
+    assert destination.read_bytes() == b"detector"

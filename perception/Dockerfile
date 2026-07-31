@@ -21,6 +21,8 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     ultralytics
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
+    "transformers==4.45.2" "huggingface-hub==0.26.2" safetensors pillow
+RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     sherpa-onnx
 RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng && \
     rm -rf /var/lib/apt/lists/*

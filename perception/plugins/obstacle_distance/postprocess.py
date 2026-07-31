@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
 from .types import Detection, Scene
-
 
 _OUTDOOR_CLASSES = {
     "barrier",

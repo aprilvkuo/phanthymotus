@@ -1,8 +1,13 @@
 from pathlib import Path
 
 from PIL import Image
-
-from plugins.obstacle_distance.cli import main, predict_distance
+from plugins.obstacle_distance import cli as cli_module
+from plugins.obstacle_distance.cli import (
+    _DEFAULT_DETECTOR_SHA256,
+    build_default_estimator,
+    main,
+    predict_distance,
+)
 from plugins.obstacle_distance.types import DistanceEstimate, Scene
 
 
@@ -47,3 +52,44 @@ def test_cli_returns_nonzero_for_missing_image(tmp_path: Path, capsys) -> None:
     assert exit_code == 2
     assert captured.out == ""
     assert "图片不存在" in captured.err
+
+
+def test_custom_detector_path_is_not_overwritten_by_default_download(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    custom_model = tmp_path / "custom.pt"
+    monkeypatch.setenv("OBSTACLE_DETECTOR_MODEL", str(custom_model))
+    monkeypatch.delenv("OBSTACLE_DETECTOR_MODEL_URL", raising=False)
+    monkeypatch.delenv("OBSTACLE_DETECTOR_MODEL_SHA256", raising=False)
+    captured: dict = {}
+
+    class CapturingDetector:
+        def __init__(self, model_path, **kwargs):
+            captured["model_path"] = model_path
+            captured.update(kwargs)
+
+    monkeypatch.setattr(cli_module, "UltralyticsDetectorBackend", CapturingDetector)
+    build_default_estimator()
+
+    assert captured["model_path"] == str(custom_model)
+    assert captured["model_url"] is None
+    assert captured["model_sha256"] is None
+
+
+def test_default_detector_download_uses_pinned_checksum(monkeypatch) -> None:
+    monkeypatch.delenv("OBSTACLE_DETECTOR_MODEL", raising=False)
+    monkeypatch.delenv("OBSTACLE_DETECTOR_MODEL_URL", raising=False)
+    monkeypatch.delenv("OBSTACLE_DETECTOR_MODEL_SHA256", raising=False)
+    captured: dict = {}
+
+    class CapturingDetector:
+        def __init__(self, model_path, **kwargs):
+            captured["model_path"] = model_path
+            captured.update(kwargs)
+
+    monkeypatch.setattr(cli_module, "UltralyticsDetectorBackend", CapturingDetector)
+    build_default_estimator()
+
+    assert captured["model_url"] is not None
+    assert captured["model_sha256"] == _DEFAULT_DETECTOR_SHA256

@@ -14,34 +14,25 @@ from PIL import Image
 
 from .backends import TransformersDepthBackend, UltralyticsDetectorBackend
 from .estimator import EstimatorConfig, ObstacleDistanceEstimator
-from .model_store import ensure_model_file
 from .types import Scene
-
 
 _DEFAULT_DETECTOR_URL = (
     "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt"
+)
+_DEFAULT_DETECTOR_SHA256 = (
+    "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
 )
 
 
 def build_default_estimator() -> ObstacleDistanceEstimator:
     """根据环境变量创建默认零样本估计器。"""
 
-    model_dir = Path(
-        os.environ.get("OBSTACLE_MODEL_DIR", "/models/obstacle_distance")
-    )
-    detector_path = Path(
-        os.environ.get(
-            "OBSTACLE_DETECTOR_MODEL",
-            str(model_dir / "yolov8n.pt"),
-        )
-    )
-    if not detector_path.is_file():
-        detector_path = ensure_model_file(
-            os.environ.get("OBSTACLE_DETECTOR_MODEL_URL", _DEFAULT_DETECTOR_URL),
-            detector_path,
-            os.environ.get("OBSTACLE_DETECTOR_MODEL_SHA256") or None,
-        )
-
+    model_dir = Path(os.environ.get("OBSTACLE_MODEL_DIR", "/models/obstacle_distance"))
+    detector_path_override = os.environ.get("OBSTACLE_DETECTOR_MODEL")
+    detector_url_override = os.environ.get("OBSTACLE_DETECTOR_MODEL_URL")
+    detector_sha_override = os.environ.get("OBSTACLE_DETECTOR_MODEL_SHA256")
+    detector_path = Path(detector_path_override or str(model_dir / "yolov8n.pt"))
+    use_default_detector = not detector_path_override and not detector_url_override
     depth_references = {
         Scene.INDOOR: os.environ.get(
             "OBSTACLE_DEPTH_INDOOR_MODEL",
@@ -60,6 +51,12 @@ def build_default_estimator() -> ObstacleDistanceEstimator:
         str(detector_path),
         confidence=float(os.environ.get("OBSTACLE_DETECTION_CONFIDENCE", "0.25")),
         device=os.environ.get("OBSTACLE_DETECTOR_DEVICE") or None,
+        model_url=(
+            _DEFAULT_DETECTOR_URL if use_default_detector else detector_url_override
+        ),
+        model_sha256=(
+            _DEFAULT_DETECTOR_SHA256 if use_default_detector else detector_sha_override
+        ),
     )
     config = EstimatorConfig(
         outdoor_compensation_m=float(
@@ -93,7 +90,9 @@ def predict_distance(
 def main(
     argv: Sequence[str] | None = None,
     *,
-    estimator_factory: Callable[[], ObstacleDistanceEstimator] = build_default_estimator,
+    estimator_factory: Callable[
+        [], ObstacleDistanceEstimator
+    ] = build_default_estimator,
 ) -> int:
     parser = argparse.ArgumentParser(description="估计正前方最近障碍物距离")
     parser.add_argument("image", help="PNG、JPG 或 JPEG 图片路径")
@@ -114,7 +113,8 @@ def main(
             )
         print(f"{distance:.6f}")
         return 0
-    except Exception as exc:
+    # CLI 是进程边界，任何模型库异常都必须转换为稳定退出码。
+    except Exception as exc:  # noqa: BLE001
         print(str(exc), file=sys.stderr)
         return 2
 

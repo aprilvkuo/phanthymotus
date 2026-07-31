@@ -12,6 +12,8 @@ perception:
     - ROS_DOMAIN_ID=42
     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     - FASTDDS_BUILTIN_TRANSPORTS=DEFAULT
+    - OBSTACLE_MODEL_DIR=/models/obstacle_distance
+    - HF_HOME=/models/huggingface
   logging:
     driver: local
     options:

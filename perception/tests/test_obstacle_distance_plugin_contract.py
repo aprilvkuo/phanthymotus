@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from plugins.obstacle_distance.plugin import ObstacleDistancePlugin, TOOLS
+from plugins.obstacle_distance.plugin import TOOLS, ObstacleDistancePlugin
 
 
 class FakeExecutor:

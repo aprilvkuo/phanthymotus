@@ -90,3 +90,59 @@ ASR result JSON:
   "asr_complete_ts": 1234567891.789
 }
 ```
+
+## Nearest Obstacle Distance
+
+The `obstacle` processor estimates the nearest forward obstacle distance from
+a compressed camera image. PNG inputs default to the indoor evaluation rule;
+JPG/JPEG inputs default to the outdoor rule. A canvas instance can override
+the scene with `indoor` or `outdoor`.
+
+The processor publishes JSON to `<input_topic>/obstacle_distance`:
+
+```json
+{
+  "timestamp": 1234567890.123,
+  "distance_m": 2.43,
+  "near_obstacle": false,
+  "confidence": 0.9,
+  "degraded": false,
+  "reason": ""
+}
+```
+
+For leaderboard-style single-image inference, run from the repository root:
+
+```bash
+PYTHONPATH=perception python3 perception/judge_obstacle_distance.py image.png
+```
+
+Successful stdout contains only one floating-point value. Runtime diagnostics
+and model library messages are redirected to stderr.
+
+### Models
+
+Model files must live outside Git. The default cache root is
+`/models/obstacle_distance`, mounted from `/opt/embodied/models` by the
+deployment service. Supported environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `OBSTACLE_MODEL_DIR` | Root directory for obstacle models |
+| `OBSTACLE_DEPTH_INDOOR_MODEL` | Hugging Face model ID or local model directory |
+| `OBSTACLE_DEPTH_OUTDOOR_MODEL` | Hugging Face model ID or local model directory |
+| `OBSTACLE_DETECTOR_MODEL` | Local YOLOv8n weight path |
+| `OBSTACLE_DETECTOR_MODEL_URL` | URL used when the detector file is absent |
+| `OBSTACLE_DETECTOR_MODEL_SHA256` | Optional detector checksum |
+| `OBSTACLE_OUTDOOR_COMPENSATION_M` | Camera-to-front-bumper compensation; default `1.7` |
+| `OBSTACLE_FALLBACK_DISTANCE_M` | Conservative finite result after inference failure |
+
+For an offline judge, download the two Hugging Face model snapshots into the
+external model volume, mirror them to the required JuiceFS HTTP service, and
+set `OBSTACLE_DEPTH_INDOOR_MODEL` and `OBSTACLE_DEPTH_OUTDOOR_MODEL` to the
+extracted local directories. See
+`plugins/obstacle_distance/MODELS.md` for exact model IDs and licenses.
+
+This is a zero-shot baseline because no competition training set is available.
+The `1.7 m` outdoor compensation must be calibrated when official camera
+extrinsics or labeled validation data become available.

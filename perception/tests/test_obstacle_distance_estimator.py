@@ -1,6 +1,9 @@
+import concurrent.futures
+import threading
+import time
+
 import numpy as np
 import pytest
-
 from plugins.obstacle_distance.estimator import (
     EstimatorConfig,
     ObstacleDistanceEstimator,
@@ -90,3 +93,35 @@ def test_estimator_returns_finite_conservative_value_on_backend_failure() -> Non
     assert result.distance_m == pytest.approx(0.5)
     assert result.degraded is True
     assert "engine failed" in result.reason
+
+
+def test_estimator_serializes_shared_model_access() -> None:
+    class ConcurrencyCheckingDepth:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+            self.state_lock = threading.Lock()
+
+        def predict(self, image: np.ndarray, scene: Scene) -> np.ndarray:
+            with self.state_lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.03)
+            with self.state_lock:
+                self.active -= 1
+            return np.full((20, 20), 2.0, dtype=np.float32)
+
+    depth = ConcurrencyCheckingDepth()
+    estimator = ObstacleDistanceEstimator(depth, FakeDetectorBackend([]))
+    image = np.zeros((20, 20, 3), dtype=np.uint8)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                lambda _: estimator.estimate(image, "frame.png"),
+                range(2),
+            )
+        )
+
+    assert [result.distance_m for result in results] == [2.0, 2.0]
+    assert depth.max_active == 1

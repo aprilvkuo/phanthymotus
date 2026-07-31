@@ -5,10 +5,11 @@ from __future__ import annotations
 import gc
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
+from .model_store import ensure_model_file
 from .types import Detection, Scene
 
 
@@ -29,7 +30,7 @@ class DetectorBackend(Protocol):
 class TransformersDepthBackend:
     """Hugging Face Depth Anything V2 Metric Small 后端。"""
 
-    DEFAULT_MODEL_REFERENCES = {
+    DEFAULT_MODEL_REFERENCES: ClassVar[Mapping[Scene, str]] = {
         Scene.INDOOR: "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
         Scene.OUTDOOR: "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf",
     }
@@ -62,12 +63,16 @@ class TransformersDepthBackend:
 
         with torch.inference_mode():
             prediction = self._model(**inputs).predicted_depth
-            prediction = torch.nn.functional.interpolate(
-                prediction.unsqueeze(1),
-                size=image.shape[:2],
-                mode="bicubic",
-                align_corners=False,
-            ).squeeze(0).squeeze(0)
+            prediction = (
+                torch.nn.functional.interpolate(
+                    prediction.unsqueeze(1),
+                    size=image.shape[:2],
+                    mode="bicubic",
+                    align_corners=False,
+                )
+                .squeeze(0)
+                .squeeze(0)
+            )
         return prediction.float().cpu().numpy().astype(np.float32, copy=False)
 
     def _ensure_loaded(self, scene: Scene) -> None:
@@ -114,12 +119,16 @@ class UltralyticsDetectorBackend:
         confidence: float = 0.25,
         image_size: int = 640,
         device: str | None = None,
+        model_url: str | None = None,
+        model_sha256: str | None = None,
         model_factory: Callable[[str], Any] | None = None,
     ):
         self._model_path = model_path
         self._confidence = confidence
         self._image_size = image_size
         self._device = device
+        self._model_url = model_url
+        self._model_sha256 = model_sha256
         self._model_factory = model_factory
         self._model: Any = None
 
@@ -167,5 +176,12 @@ class UltralyticsDetectorBackend:
             from ultralytics import YOLO
 
             self._model_factory = YOLO
-        self._model = self._model_factory(self._model_path)
+        model_path = Path(self._model_path)
+        if self._model_url:
+            model_path = ensure_model_file(
+                self._model_url,
+                model_path,
+                self._model_sha256,
+            )
+        self._model = self._model_factory(str(model_path))
         return self._model

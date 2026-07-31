@@ -9,7 +9,6 @@ from typing import Any
 
 from .cli import build_default_estimator
 
-
 TOOLS = [
     {
         "name": "distance",
@@ -323,7 +322,10 @@ def _default_node_factory(input_topic, estimator, config, node_suffix):
                         ensure_ascii=False,
                     )
                     self._publisher.publish(message)
-                except Exception as exc:
-                    self.get_logger().error(f"obstacle distance inference failed: {exc}")
+                # ROS worker 不能因单帧解码或第三方模型异常退出。
+                except Exception as exc:  # noqa: BLE001
+                    self.get_logger().error(
+                        f"obstacle distance inference failed: {exc}"
+                    )
 
     return ObstacleDistanceNode()
