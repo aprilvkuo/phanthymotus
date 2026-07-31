@@ -1,0 +1,9 @@
+# Obstacle Distance perception model — runtime deps (kept minimal)
+# Python 3.12+ (matches phanthymotus). CPU runs for testing; GPU/TensorRT on Jetson.
+numpy>=1.24
+torch>=2.2
+torchvision>=0.17
+Pillow>=10.0
+# Optional, only for the Jetson/TensorRT path (see export_trt.py):
+# onnx>=1.15
+# onnxruntime-gpu / tensorrt (installed on the Jetson image)

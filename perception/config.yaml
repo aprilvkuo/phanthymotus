@@ -45,3 +45,12 @@ plugins:
     confidence: 0.3
     classes: []         # empty = default broad set
     fps: 5
+
+  # 障碍物距离度量评测榜 —— 正前方最近障碍物距离（Nearest Obstacle Distance）
+  # 默认关闭；开启后 Perception 暴露 MCP 工具 obstacle_nearest_obstacle_distance
+  # 权重(obstacle_distance.pt)请放到 juicefs，镜像内运行时下载到 model_dir。
+  obstacle_distance:
+    enabled: false
+    namespace: ""       # auto-detect from hostname if empty
+    model_dir: /models/obstacle_distance
+    fps: 10

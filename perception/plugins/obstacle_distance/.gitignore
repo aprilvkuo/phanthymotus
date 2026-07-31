@@ -1,0 +1,9 @@
+# Never commit model weights / checkpoints / large binaries.
+# The requirement forbids committing any file > 1MB; weights live on juicefs
+# and are downloaded at runtime by the judgeflow image.
+weights/
+*.pt
+*.onnx
+*.engine
+__pycache__/
+*.pyc

@@ -87,6 +87,16 @@ class PerceptionBundle:
             self._plugins.append(plugin)
             log.info("VideoObjectPerceptionPlugin loaded (namespace=%s)", namespace)
 
+        if plugins_cfg.get("obstacle_distance", {}).get("enabled", False):
+            import re, socket
+            namespace = plugins_cfg["obstacle_distance"].get("namespace", "").strip()
+            if not namespace:
+                namespace = re.sub(r"[^a-zA-Z0-9_]", "_", socket.gethostname())
+            from plugins.obstacle_distance import ObstacleDistancePlugin
+            plugin = ObstacleDistancePlugin(plugins_cfg["obstacle_distance"], namespace, executor)
+            self._plugins.append(plugin)
+            log.info("ObstacleDistancePlugin loaded (namespace=%s)", namespace)
+
     def get_all_tools(self) -> list:
         tools = []
         for p in self._plugins:
