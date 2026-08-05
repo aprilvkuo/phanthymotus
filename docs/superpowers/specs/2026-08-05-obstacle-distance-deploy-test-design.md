@@ -17,8 +17,10 @@ preferred over multiple scripts because image selection, model mounts,
 NVIDIA runtime arguments, and error handling stay consistent across build,
 test, and service-management operations.
 
-The script reuses `deploy/build_perception.sh` for Jetson image construction.
-It invokes the existing in-container module entry point
+The script reuses `deploy/build_perception.sh --variant jetson` for image
+construction. That variant is required to resolve to
+`perception/Dockerfile.jetson`; the one-click workflow must never fall back to
+the CPU `perception/Dockerfile`. It invokes the existing in-container module entry point
 `python3 -m plugins.obstacle_distance.cli` for single-image inference, so the
 Docker image does not need to contain repository tests or the top-level judge
 wrapper.
@@ -39,7 +41,7 @@ wrapper.
 2. Resolve the deterministic image reference for the current Git commit.
 3. Reuse the image when it already exists, unless `--rebuild` is supplied.
 4. Otherwise call `deploy/build_perception.sh --variant jetson` with the
-   selected mirror.
+   selected mirror. This must build from `perception/Dockerfile.jetson`.
 5. Run a small PyTorch CUDA probe inside the image.
 6. Mount the input image and persistent model directory read-only/read-write as
    appropriate.
@@ -202,6 +204,7 @@ Coverage includes:
 - NVIDIA runtime and persistent model mounts
 - CUDA-related environment variables
 - explicit image reference handling
+- fixed use of the Jetson build variant and `perception/Dockerfile.jetson`
 - forwarded optional model variables
 - safe lifecycle behavior, including no silent `docker rm`
 - executable file mode and README usage examples
