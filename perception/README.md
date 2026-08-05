@@ -120,6 +120,63 @@ PYTHONPATH=perception python3 perception/judge_obstacle_distance.py image.png
 Successful stdout contains only one floating-point value. Runtime diagnostics
 and model library messages are redirected to stderr.
 
+### One-click Jetson deploy and test
+
+From the repository root on a Jetson host, run one real GPU inference with:
+
+```bash
+./deploy/obstacle_distance.sh deploy-test --image /absolute/path/indoor.png --scene indoor
+```
+
+The command validates Docker and the NVIDIA runtime, builds or reuses the
+current commit's Jetson image, probes CUDA inside the container, mounts the
+image read-only, and reports the predicted distance and elapsed time. The
+image is always built through `deploy/build_perception.sh --variant jetson`,
+which selects `perception/Dockerfile.jetson`; it never falls back to the CPU
+Dockerfile. Use `--mirror tencent`, `--mirror tuna`, or `--mirror none` to
+select package mirrors, and use `--rebuild` to force a rebuild.
+
+Preview the resolved commands without Docker or GPU access:
+
+```bash
+./deploy/obstacle_distance.sh deploy-test \
+  --dry-run \
+  --image /absolute/path/outdoor.jpg \
+  --scene outdoor \
+  --image-ref local/perception:test
+```
+
+The optional full Perception service is managed separately:
+
+```bash
+./deploy/obstacle_distance.sh build
+./deploy/obstacle_distance.sh start
+./deploy/obstacle_distance.sh status
+./deploy/obstacle_distance.sh logs
+./deploy/obstacle_distance.sh stop
+```
+
+`stop` does not remove the container. Existing containers, images, and model
+files are never deleted or replaced silently.
+
+Models persist under `/opt/embodied/models` by default. Override that host
+directory with `--model-dir`. With internet access, the first inference can
+populate the Hugging Face and detector caches. For offline deployment, place
+the model snapshots in the mounted directory and set the applicable
+`OBSTACLE_DEPTH_INDOOR_MODEL`, `OBSTACLE_DEPTH_OUTDOOR_MODEL`, and
+`OBSTACLE_DETECTOR_MODEL` environment variables before running the script;
+the script forwards supported `OBSTACLE_*` model variables into the container.
+
+Run the obstacle-distance unit tests without creating a repository lockfile:
+
+```bash
+PYTHONPATH=perception uv run --no-project --python 3.12 --with pytest --with numpy --with pillow pytest perception/tests -q
+```
+
+The `fps: 3` value in `perception/config.yaml` is a processing-rate cap, not a
+measured performance result. Real inference throughput, GPU utilization, and
+power must be measured on the target Jetson.
+
 ### Models
 
 Model files must live outside Git. The default cache root is

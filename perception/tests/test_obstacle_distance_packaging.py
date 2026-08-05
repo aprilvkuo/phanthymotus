@@ -55,3 +55,22 @@ def test_default_detector_download_has_pinned_sha256() -> None:
     assert _DEFAULT_DETECTOR_SHA256 == (
         "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
     )
+
+
+def test_one_click_script_is_executable_and_pinned_to_jetson_dockerfile() -> None:
+    script = ROOT / "deploy" / "obstacle_distance.sh"
+
+    assert script.is_file()
+    assert script.stat().st_mode & 0o111
+    assert "--variant jetson" in script.read_text()
+    build_script = (ROOT / "deploy" / "build_perception.sh").read_text()
+    assert 'DOCKERFILE="${REPO_ROOT}/perception/Dockerfile.jetson"' in build_script
+
+
+def test_docs_describe_one_click_jetson_deploy_test() -> None:
+    readme = (PERCEPTION / "README.md").read_text()
+
+    assert "deploy/obstacle_distance.sh deploy-test" in readme
+    assert "Dockerfile.jetson" in readme
+    assert "PYTHONPATH=perception uv run --no-project" in readme
+    assert "fps: 3" in readme
