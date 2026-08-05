@@ -45,6 +45,14 @@ RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     pyyaml requests websockets webrtcvad websocket-client dashscope && \
     pip3 install --no-cache-dir --no-deps -i ${PYPI_MIRROR} silero-vad
 
+# ── Obstacle-Distance (MiDaS) plugin deps ──────────────────────────
+# timm pulled --no-deps so it does NOT overwrite the base image's CUDA
+# torch/torchvision. base already ships torchvision; just add timm + its
+# pure-python runtime deps.
+RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} pillow numpy && \
+    pip3 install --no-cache-dir --no-deps -i ${PYPI_MIRROR} timm && \
+    pip3 install --no-cache-dir -i ${PYPI_MIRROR} huggingface_hub safetensors
+
 # ── HTMSG deps (KISS-ICP + future semantic) ──────────────────────
 RUN pip3 install --no-cache-dir -i ${PYPI_MIRROR} \
     kiss-icp scipy
