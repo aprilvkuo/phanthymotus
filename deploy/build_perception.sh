@@ -31,12 +31,9 @@ done
 RESOURCE_CENTER_URL="${RESOURCE_CENTER_URL:-https://motus.phanthy.com}"
 
 # If registry not configured, build locally only
-PUSH_ENABLED=true
-if [ -z "${REGISTRY:-}" ] || [ -z "${REGISTRY_USER:-}" ] || [ -z "${REGISTRY_PASSWORD:-}" ] || [ -z "${IMAGE_NAMESPACE:-}" ]; then
+resolve_image_destination
+if ! ${PUSH_ENABLED}; then
     echo "[info] Registry not configured — building locally only (no push)."
-    PUSH_ENABLED=false
-    REGISTRY="${REGISTRY:-local}"
-    IMAGE_NAMESPACE="${IMAGE_NAMESPACE:-phanthy-motus}"
 fi
 
 DATE="$(date +%y%m%d)"

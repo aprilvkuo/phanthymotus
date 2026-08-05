@@ -65,6 +65,8 @@ def test_one_click_script_is_executable_and_pinned_to_jetson_dockerfile() -> Non
     assert "--variant jetson" in script.read_text()
     build_script = (ROOT / "deploy" / "build_perception.sh").read_text()
     assert 'DOCKERFILE="${REPO_ROOT}/perception/Dockerfile.jetson"' in build_script
+    assert "resolve_image_destination" in script.read_text()
+    assert "resolve_image_destination" in build_script
 
 
 def test_docs_describe_one_click_jetson_deploy_test() -> None:

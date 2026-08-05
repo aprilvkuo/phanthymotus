@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_SCRIPT="${SCRIPT_DIR}/build_perception.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/build_common.sh"
 
 usage() {
     cat <<'EOF'
@@ -46,7 +48,7 @@ die() {
 require_value() {
     local option="$1"
     local value="${2:-}"
-    [[ -n "${value}" ]] || die "${option} 缺少参数值"
+    [[ -n "${value}" && "${value}" != -* ]] || die "${option} 缺少参数值"
 }
 
 print_argument() {
@@ -125,17 +127,11 @@ resolve_image_ref() {
         set -u
     fi
 
-    local registry="local"
-    local namespace="phanthy-motus"
-    if [[ -n "${REGISTRY:-}" && -n "${REGISTRY_USER:-}" \
-        && -n "${REGISTRY_PASSWORD:-}" && -n "${IMAGE_NAMESPACE:-}" ]]; then
-        registry="${REGISTRY}"
-        namespace="${IMAGE_NAMESPACE}"
-    fi
+    resolve_image_destination
 
     local commit
     commit="$(git -C "${REPO_ROOT}" rev-parse --short=7 HEAD)"
-    IMAGE_REF="${registry}/${namespace}/perception:release.$(date +%y%m%d).${commit}-jetson"
+    IMAGE_REF="${REGISTRY}/${IMAGE_NAMESPACE}/perception:release.$(date +%y%m%d).${commit}-jetson"
 }
 
 ensure_jetson_image() {
@@ -213,6 +209,7 @@ run_single_image_test() {
     if [[ "${SCENE}" != "auto" ]]; then
         command+=(--scene "${SCENE}")
     fi
+    command+=(--fail-on-backend-error)
 
     if ${DRY_RUN}; then
         print_command "${command[@]}"

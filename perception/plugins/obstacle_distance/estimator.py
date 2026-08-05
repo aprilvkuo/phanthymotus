@@ -56,15 +56,23 @@ class ObstacleDistanceEstimator:
         image: np.ndarray,
         source_name: str | Path,
         scene: str | Scene | None = None,
+        *,
+        raise_on_error: bool = False,
     ) -> DistanceEstimate:
         resolved_scene = infer_scene(source_name, scene)
         with self._inference_lock:
-            return self._estimate_locked(image, resolved_scene)
+            return self._estimate_locked(
+                image,
+                resolved_scene,
+                raise_on_error=raise_on_error,
+            )
 
     def _estimate_locked(
         self,
         image: np.ndarray,
         resolved_scene: Scene,
+        *,
+        raise_on_error: bool,
     ) -> DistanceEstimate:
         try:
             depth = self._depth_backend.predict(image, resolved_scene)
@@ -98,7 +106,9 @@ class ObstacleDistanceEstimator:
                 reason="检测器未找到有效障碍物，已使用中心通行区深度",
             )
         # 推理是机器人安全边界，第三方后端异常必须转换为有限保守距离。
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            if raise_on_error:
+                raise
             return DistanceEstimate(
                 distance_m=self._config.fallback_distance_m,
                 scene=resolved_scene,

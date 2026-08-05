@@ -131,7 +131,13 @@ From the repository root on a Jetson host, run one real GPU inference with:
 The command validates Docker and the NVIDIA runtime, builds or reuses the
 current commit's Jetson image, probes CUDA inside the container, mounts the
 image read-only, and reports the predicted distance and elapsed time. The
-image is always built through `deploy/build_perception.sh --variant jetson`,
+single-image command enables strict backend error handling, so model download,
+load, CUDA, and inference failures return a nonzero status instead of being
+reported as the conservative runtime fallback distance. A valid outdoor depth
+result may still report a degraded detector confidence when no target class is
+found.
+
+The image is always built through `deploy/build_perception.sh --variant jetson`,
 which selects `perception/Dockerfile.jetson`; it never falls back to the CPU
 Dockerfile. Use `--mirror tencent`, `--mirror tuna`, or `--mirror none` to
 select package mirrors, and use `--rebuild` to force a rebuild.

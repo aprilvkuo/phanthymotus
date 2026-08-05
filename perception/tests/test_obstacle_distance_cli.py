@@ -54,6 +54,29 @@ def test_cli_returns_nonzero_for_missing_image(tmp_path: Path, capsys) -> None:
     assert "图片不存在" in captured.err
 
 
+def test_cli_strict_mode_returns_nonzero_for_backend_failure(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    class BackendFailingEstimator:
+        def estimate(self, image, source_name, scene=None, *, raise_on_error=False):
+            assert raise_on_error is True
+            raise RuntimeError("engine failed")
+
+    image_path = tmp_path / "frame.png"
+    Image.new("RGB", (16, 12), (10, 20, 30)).save(image_path)
+
+    exit_code = main(
+        [str(image_path), "--fail-on-backend-error"],
+        estimator_factory=BackendFailingEstimator,
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "engine failed" in captured.err
+
+
 def test_custom_detector_path_is_not_overwritten_by_default_download(
     tmp_path: Path,
     monkeypatch,

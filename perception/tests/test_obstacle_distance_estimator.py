@@ -95,6 +95,24 @@ def test_estimator_returns_finite_conservative_value_on_backend_failure() -> Non
     assert "engine failed" in result.reason
 
 
+def test_estimator_strict_mode_reraises_backend_failure() -> None:
+    class BrokenDepthBackend:
+        def predict(self, image: np.ndarray, scene: Scene) -> np.ndarray:
+            raise RuntimeError("engine failed")
+
+    estimator = ObstacleDistanceEstimator(
+        BrokenDepthBackend(),
+        FakeDetectorBackend([]),
+    )
+
+    with pytest.raises(RuntimeError, match="engine failed"):
+        estimator.estimate(
+            np.zeros((20, 20, 3), dtype=np.uint8),
+            "frame.png",
+            raise_on_error=True,
+        )
+
+
 def test_estimator_serializes_shared_model_access() -> None:
     class ConcurrencyCheckingDepth:
         def __init__(self):

@@ -8,13 +8,14 @@ import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Protocol, cast
 
 import numpy as np
 from PIL import Image
 
 from .backends import TransformersDepthBackend, UltralyticsDetectorBackend
 from .estimator import EstimatorConfig, ObstacleDistanceEstimator
-from .types import Scene
+from .types import DistanceEstimate, Scene
 
 _DEFAULT_DETECTOR_URL = (
     "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt"
@@ -22,6 +23,26 @@ _DEFAULT_DETECTOR_URL = (
 _DEFAULT_DETECTOR_SHA256 = (
     "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36"
 )
+
+
+class _DistanceEstimator(Protocol):
+    def estimate(
+        self,
+        image: np.ndarray,
+        source_name: str | Path,
+        scene: str | Scene | None = None,
+    ) -> DistanceEstimate: ...
+
+
+class _StrictDistanceEstimator(Protocol):
+    def estimate(
+        self,
+        image: np.ndarray,
+        source_name: str | Path,
+        scene: str | Scene | None = None,
+        *,
+        raise_on_error: bool = False,
+    ) -> DistanceEstimate: ...
 
 
 def build_default_estimator() -> ObstacleDistanceEstimator:
@@ -72,8 +93,9 @@ def build_default_estimator() -> ObstacleDistanceEstimator:
 def predict_distance(
     image_path: str | Path,
     *,
-    estimator: ObstacleDistanceEstimator | None = None,
+    estimator: _DistanceEstimator | None = None,
     scene: str | Scene | None = None,
+    raise_on_error: bool = False,
 ) -> float:
     """读取单张图片并返回单位为米的最近障碍物距离。"""
 
@@ -84,15 +106,23 @@ def predict_distance(
         rgb = np.asarray(pil_image.convert("RGB"), dtype=np.uint8)
     bgr = np.ascontiguousarray(rgb[:, :, ::-1])
     active_estimator = estimator or build_default_estimator()
-    return float(active_estimator.estimate(bgr, str(path), scene).distance_m)
+    if raise_on_error:
+        strict_estimator = cast(_StrictDistanceEstimator, active_estimator)
+        estimate = strict_estimator.estimate(
+            bgr,
+            str(path),
+            scene,
+            raise_on_error=True,
+        )
+    else:
+        estimate = active_estimator.estimate(bgr, str(path), scene)
+    return float(estimate.distance_m)
 
 
 def main(
     argv: Sequence[str] | None = None,
     *,
-    estimator_factory: Callable[
-        [], ObstacleDistanceEstimator
-    ] = build_default_estimator,
+    estimator_factory: Callable[[], _DistanceEstimator] = build_default_estimator,
 ) -> int:
     parser = argparse.ArgumentParser(description="估计正前方最近障碍物距离")
     parser.add_argument("image", help="PNG、JPG 或 JPEG 图片路径")
@@ -100,6 +130,11 @@ def main(
         "--scene",
         choices=[scene.value for scene in Scene],
         help="覆盖按图片格式推断的场景",
+    )
+    parser.add_argument(
+        "--fail-on-backend-error",
+        action="store_true",
+        help="模型下载、加载或推理失败时返回非零退出码",
     )
     args = parser.parse_args(argv)
 
@@ -110,6 +145,7 @@ def main(
                 args.image,
                 estimator=estimator,
                 scene=args.scene,
+                raise_on_error=args.fail_on_backend_error,
             )
         print(f"{distance:.6f}")
         return 0

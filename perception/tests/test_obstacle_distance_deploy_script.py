@@ -36,6 +36,20 @@ def test_deploy_test_requires_image() -> None:
     assert "--image" in result.stderr
 
 
+def test_missing_value_never_consumes_dry_run_option() -> None:
+    result = run_script(
+        "start",
+        "--model-dir",
+        "--dry-run",
+        "--image-ref",
+        "test/perception:jetson",
+    )
+
+    assert result.returncode == 2
+    assert "--model-dir 缺少参数值" in result.stderr
+    assert "docker" not in result.stdout
+
+
 def test_deploy_test_rejects_missing_image(tmp_path: Path) -> None:
     result = run_script(
         "deploy-test",
@@ -97,6 +111,40 @@ def test_build_is_pinned_to_jetson_variant() -> None:
 
 
 @pytest.mark.parametrize(
+    ("registry", "namespace", "expected_prefix"),
+    [
+        ("registry.example", "team", "registry.example/team/perception:"),
+        ("", "team", "local/team/perception:"),
+        ("registry.example", "", "registry.example/phanthy-motus/perception:"),
+    ],
+)
+def test_partial_registry_configuration_matches_build_script(
+    tmp_path: Path,
+    registry: str,
+    namespace: str,
+    expected_prefix: str,
+) -> None:
+    image = tmp_path / "frame.png"
+    image.write_bytes(b"image")
+
+    result = run_script(
+        "deploy-test",
+        "--dry-run",
+        "--image",
+        str(image),
+        env={
+            "REGISTRY": registry,
+            "REGISTRY_USER": "",
+            "REGISTRY_PASSWORD": "",
+            "IMAGE_NAMESPACE": namespace,
+        },
+    )
+
+    assert result.returncode == 0
+    assert expected_prefix in result.stdout
+
+
+@pytest.mark.parametrize(
     ("filename", "scene", "container_path"),
     [
         ("frame.png", "indoor", "/data/input.png"),
@@ -135,6 +183,7 @@ def test_deploy_test_renders_gpu_inference_command(
     assert "OBSTACLE_DEPTH_DEVICE=cuda:0" in result.stdout
     assert "OBSTACLE_DETECTOR_DEVICE=0" in result.stdout
     assert "python3 -m plugins.obstacle_distance.cli" in result.stdout
+    assert "--fail-on-backend-error" in result.stdout
     assert f"{container_path} --scene {scene}" in result.stdout
     assert "test/perception:jetson" in result.stdout
 

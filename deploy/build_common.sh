@@ -9,6 +9,19 @@ ARCH="$(uname -m)"
 IS_ARM64=false
 [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]] && IS_ARM64=true
 
+# ── Registry 目标解析 ─────────────────────────────────────────────────
+# Registry 凭据不完整时只做本地构建，但保留已经显式设置的地址和命名空间。
+resolve_image_destination() {
+    PUSH_ENABLED=true
+    if [ -z "${REGISTRY:-}" ] || [ -z "${REGISTRY_USER:-}" ] \
+        || [ -z "${REGISTRY_PASSWORD:-}" ] || [ -z "${IMAGE_NAMESPACE:-}" ]; then
+        PUSH_ENABLED=false
+        REGISTRY="${REGISTRY:-local}"
+        IMAGE_NAMESPACE="${IMAGE_NAMESPACE:-phanthy-motus}"
+    fi
+    export PUSH_ENABLED REGISTRY IMAGE_NAMESPACE
+}
+
 # ── 镜像源选择 ────────────────────────────────────────────────────────
 # 通过 --mirror 参数或 MIRROR 环境变量或交互式选择
 select_mirror() {
