@@ -50,6 +50,61 @@ python benchmark.py --image <rgb.jpg>
 python predict.py --image <rgb.jpg> --json
 ```
 
+## 在服务器上测试（Docker）
+
+fork 里已有完整的 perception-stack Docker 构建链路，本插件会被自动打包；
+另外本目录（`obstacle_distance/`）提供一个**独立轻量镜像**，可脱离 ROS 单独验证
+模型与 judgeflow 入口（最快的服务器自测路径）。
+
+### 路径 A：独立镜像（推荐先跑这个，验证模型本身）
+
+```bash
+# 1) 构建（从 obstacle_distance/ 目录）
+docker build -t obstacle-nod:test .
+
+# 2) 跑自测（自动生成合成场景，无需任何数据）
+docker run --rm obstacle-nod:test
+# => 输出参数量(<30M)、深度图统计、NOD、耗时；末尾打印 OK 即通过
+
+# 3) 用真实正前方图片测（把宿主机图片目录挂到 /data）
+docker run --rm -v /绝对路径/图片目录:/data:ro obstacle-nod:test \
+    python test_obstacle.py --image /data/frame.jpg
+# 或直接跑 judgeflow 入口
+docker run --rm -v /绝对路径/图片目录:/data:ro obstacle-nod:test \
+    python predict.py --image /data/frame.jpg --json
+```
+
+> 离线权重：把预下载的 torch hub 缓存挂进去并设 `TORCH_HOME`：
+> `docker run --rm -e TORCH_HOME=/cache -v /host/cache:/cache obstacle-nod:test`
+> 首次有网时会自动从 torch.hub 下载 MiDaS（~85MB）。
+
+本目录附带 `docker_test.sh` 一键封装：`bash docker_test.sh`（自测）或
+`bash docker_test.sh --image /abs/frame.jpg`。
+
+### 路径 B：完整 perception-stack 镜像（验证 MCP 插件）
+
+依赖已在 `perception/Dockerfile`(CPU) 与 `perception/Dockerfile.jetson`(Jetson)
+补齐（`timm/torchvision/pillow/numpy`）。构建：
+
+```bash
+cd phanthymotus
+./deploy/build_perception.sh --variant cpu        # 或 --variant jetson
+# 未配置 registry 时只本地构建，不推送
+```
+
+构建后容器内测试插件（`perception/plugins/obstacle_distance/test_obstacle.py`）：
+
+```bash
+docker run --rm <image> python /work/plugins/obstacle_distance/test_obstacle.py
+# 或用真实图：
+docker run --rm -v /abs/imgdir:/data:ro <image> \
+    python /work/plugins/obstacle_distance/test_obstacle.py --image /data/frame.jpg
+```
+
+启动完整感知栈（MCP HTTP 服务，监听 15720/15721）后，可通过 MCP 调用
+`obstacle_nearest_obstacle_distance` 工具（动作 `start`/`query`/`info`/`stop`/`config`）。
+
+
 ## judgeflow 接口契约（假设）
 
 ```python
