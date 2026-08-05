@@ -1,0 +1,13 @@
+# Convenience wrapper to build/run the NOD benchmark image.
+#
+#   docker compose build            # build the image
+#   docker compose up               # run unit tests (default CMD)
+#   docker compose run --rm nod-test bash scripts/test_server.sh   # full flow
+#   docker compose run --rm nod-test python -m nod.evaluate --demo 50
+services:
+  nod-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nod-benchmark:latest
+    command: ["python", "tests/test_geometric.py"]
