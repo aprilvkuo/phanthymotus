@@ -642,14 +642,48 @@ class OCRPlugin:
                     self._executor.remove_node(self._nodes[instance_id])
                     del self._nodes[instance_id]
                 return {"status": "configured", "instance_id": instance_id}
+
+            # 全局 config：如果关键字段（影响 adapter 构建的）没变，直接复用现有 adapter，
+            # 避免每个 case 都重建 onnxruntime.InferenceSession 造成内存持续增长
+            adapter_keys = ('provider', 'url', 'key', 'model', 'model_dir', 'model_base_url', 'num_threads')
+            adapter_unchanged = all(
+                self._config.get(k) == cfg.get(k, self._config.get(k))
+                for k in adapter_keys
+            )
+
+            # 更新非 adapter 相关字段（如 language）
+            prev_language = self._language
+            self._config.update(cfg)
+            self._language = self._config.get('language', self._language)
+
+            if adapter_unchanged and self._adapter is not None:
+                log.info("[ocr] config unchanged for adapter fields, reusing existing adapter")
             else:
-                self._config.update(cfg)
-                self._adapter = _build_ocr_adapter(self._config)
-                self._language = self._config.get('language', self._language)
+                # 先停止所有运行中的节点（它们持有旧 adapter 引用）
                 for key in list(self._nodes.keys()):
                     self._nodes[key].stop()
                     self._executor.remove_node(self._nodes[key])
                     del self._nodes[key]
-                return {"status": "configured", "adapter_ok": self._adapter is not None}
+                # 显式释放旧 adapter，再构建新 adapter
+                old_adapter = self._adapter
+                self._adapter = None
+                if old_adapter is not None:
+                    close = getattr(old_adapter, 'close', None)
+                    if callable(close):
+                        try:
+                            close()
+                        except Exception as e:
+                            log.warning(f"[ocr] adapter close() failed: {e}")
+                    del old_adapter
+                self._adapter = _build_ocr_adapter(self._config)
+
+            # 语言变化需要重启节点（节点缓存了 language）
+            if self._language != prev_language:
+                for key in list(self._nodes.keys()):
+                    self._nodes[key].stop()
+                    self._executor.remove_node(self._nodes[key])
+                    del self._nodes[key]
+
+            return {"status": "configured", "adapter_ok": self._adapter is not None, "adapter_reused": adapter_unchanged}
 
         return None

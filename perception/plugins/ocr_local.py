@@ -80,6 +80,25 @@ class PPOCRv6ONNXAdapter:
         self.det_session = self._create_session(self.det_model_path)
         self.rec_session = self._create_session(self.rec_model_path)
 
+    def close(self) -> None:
+        """显式释放 onnxruntime InferenceSession，避免内存滞留。"""
+        for attr in ("det_session", "rec_session"):
+            sess = getattr(self, attr, None)
+            if sess is None:
+                continue
+            try:
+                # onnxruntime InferenceSession 实现了 __del__，但显式置 None 让引用计数立即下降
+                setattr(self, attr, None)
+                del sess
+            except Exception:
+                pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self.close()
+
     def _ensure_models(self, cfg: dict) -> None:
         if all(
             os.path.isfile(path)
