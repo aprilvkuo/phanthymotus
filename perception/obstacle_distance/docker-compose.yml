@@ -1,0 +1,32 @@
+# docker-compose.yml —— obstacle_distance 模块自包含运行定义
+#
+# 关键设计：使用 volumes 挂载（. : /app）源码，而非 build。
+#   原 Dockerfile 内含 `COPY perception/obstacle_distance ...`，
+#   依赖“仓库根目录”作为 build context。本 compose 直接把模块目录挂进
+#   容器 /app，因此在模块目录下 `docker compose up` 即可，无需关心仓库根 context。
+#
+# 用法:
+#   x86 (CUDA) 机器跑测试:   docker compose run test
+#   Jetson (arm64/L4T) 推理:  docker compose run infer   # 仅 Jetson 设备可运行
+#
+# 注意:
+#   - `test` 使用 nvidia CUDA 运行时镜像，需宿主机具备 nvidia-container-toolkit。
+#   - `infer` 使用 L4T ML 镜像，仅适用于 Jetson (arm64) 平台，x86 无法运行。
+
+services:
+  # x86 (CUDA) 机器：安装依赖并运行 pytest 测试套件
+  test:
+    image: nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: bash -c "pip install -q -r requirements.txt && python -m pytest tests/ -q -rs"
+
+  # Jetson (arm64 / L4T) 专用：运行推理入口
+  # 注意：该镜像为 aarch64 L4T 镜像，仅能在 Jetson 设备上运行，x86 不支持。
+  infer:
+    image: nvcr.io/nvidia/l4t-ml:r35.2.1-py3
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: python src/infer.py --image /app/sample.jpg

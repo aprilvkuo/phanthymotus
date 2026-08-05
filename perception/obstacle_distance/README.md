@@ -40,6 +40,43 @@ python scripts/eval.py --num 200
 python scripts/benchmark.py --n 100
 ```
 
+## 一键部署与测试
+
+本模块提供三种一键运行方式，**均不依赖仓库根目录**（模块自包含）。`docker-compose.yml` 使用 volume 挂载（`.:/app`）方式，无需关心 Dockerfile 里 `COPY perception/obstacle_distance` 所依赖的仓库根 build context，在模块目录下直接操作即可。
+
+### 1. 本地一键测试（自动装依赖 + 跑 pytest）
+
+```bash
+bash run_tests.sh
+```
+
+> 默认按 `requirements.txt` 安装全部依赖后跑 `pytest tests/`；torch 相关用例在缺少权重/无 GPU 时自动跳过，纯 numpy 用例始终可跑。
+
+### 2. Make 目标（PHONY：help / test / train / export / docker / push）
+
+```bash
+make test     # 本地跑 pytest (tests/)
+make docker   # docker compose 跑测试 (x86 CUDA 镜像)
+make train    # 训练（需数据，--config configs/default.yaml）
+make export   # 导出 onnx
+make push     # git push 到 origin feat/obstacle-distance-baseline
+make help     # 查看全部目标说明
+```
+
+### 3. Docker Compose（挂载方式，无需 build）
+
+- **x86 (CUDA) 机器**跑测试：
+
+  ```bash
+  docker compose run test
+  ```
+
+- **Jetson (arm64 / L4T) 设备**跑推理（该镜像仅 Jetson 可运行，x86 不支持）：
+
+  ```bash
+  docker compose run infer
+  ```
+
 ## 关键约定
 
 - 输入 224×224，letterbox（pad 填 ImageNet 均值）后归一化。
