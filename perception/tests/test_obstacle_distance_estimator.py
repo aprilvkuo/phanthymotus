@@ -70,7 +70,11 @@ def test_estimator_uses_center_corridor_when_detector_has_no_target() -> None:
         EstimatorConfig(outdoor_compensation_m=1.0),
     )
 
-    result = estimator.estimate(np.zeros((40, 60, 3), dtype=np.uint8), "frame.jpeg")
+    result = estimator.estimate(
+        np.zeros((40, 60, 3), dtype=np.uint8),
+        "frame.jpeg",
+        raise_on_error=True,
+    )
 
     assert result.distance_m == pytest.approx(3.0)
     assert result.degraded is True
