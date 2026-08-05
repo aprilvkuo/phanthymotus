@@ -120,6 +120,18 @@ ARG DEBUG_TIME=0
 
 
 
+# ── libffi8 (opencv-python-headless 需要 libffi.so.8, base 为 Ubuntu 20.04 只有 libffi7) ──
+# 20.04/ports 仓库无 libffi8 包, 直接从 Ubuntu ports pool 拉 22.04 的 deb 解出 .so 注入。
+ARG LIBFFI8_DEB_URL=http://ports.ubuntu.com/pool/main/libf/libffi/libffi8_3.4.2-4_arm64.deb
+RUN tmpdir=$(mktemp -d) && \
+    (curl -fsSL -o "$tmpdir/libffi8.deb" "${LIBFFI8_DEB_URL}" && \
+     dpkg-deb -x "$tmpdir/libffi8.deb" "$tmpdir/rootfs" && \
+     cp "$tmpdir/rootfs/usr/lib/aarch64-linux-gnu/libffi.so.8.1.0" /usr/lib/aarch64-linux-gnu/ && \
+     ln -sf libffi.so.8.1.0 /usr/lib/aarch64-linux-gnu/libffi.so.8) || \
+    echo "WARN: libffi8 fetch failed, assuming libffi.so.8 already present"; \
+    rm -rf "$tmpdir"; \
+    ldconfig
+
 RUN echo "DEBUG_TIME=${DEBUG_TIME}" && \
     python3 -c "\
 import cv2; \
@@ -139,6 +151,9 @@ print('yaml:', yaml.__version__); \
 print('OCR dependencies OK')" && \
     echo "========== libffi ==========" && \
     ldconfig -p | grep libffi || true
+
+# cv2 运行期依赖 libffi.so.8, 缺失会导致 OCR 插件初始化失败 (本地_ppocr 无法加载)
+RUN python3 -c "import ctypes; ctypes.CDLL('libffi.so.8'); print('libffi.so.8 OK')"
 
 RUN export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 && \
     source /opt/ros/humble/install/setup.bash && \
