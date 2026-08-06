@@ -74,6 +74,8 @@ class PPOCRv6ONNXAdapter:
         self.rec_score_thresh = float(cfg.get("rec_score_thresh", 0.3))
         self.num_threads = max(1, int(cfg.get("num_threads", 2)))
         self.max_candidates = max(1, int(cfg.get("max_candidates", 1000)))
+        # 限制输入图片最大边长，避免大图推理时内存峰值过高（默认 1920，0 表示不缩放）
+        self.max_input_side = int(cfg.get("max_input_side", os.environ.get("OCR_MAX_INPUT_SIDE", 1920)))
 
         self._ensure_models(cfg)
         self.characters = self._load_characters(self.rec_config_path)
@@ -154,6 +156,19 @@ class PPOCRv6ONNXAdapter:
         if image is None:
             raise ValueError("unsupported or invalid image")
 
+        # 预缩放：超过 max_input_side 的大图先等比缩小，避免 det/rec 推理时内存峰值过高
+        original_height, original_width = image.shape[:2]
+        scale_back = 1.0  # bbox 坐标需要按比例还原到原图尺寸
+        if self.max_input_side > 0:
+            max_side = max(original_height, original_width)
+            if max_side > self.max_input_side:
+                scale = self.max_input_side / max_side
+                new_w = max(1, int(round(original_width * scale)))
+                new_h = max(1, int(round(original_height * scale)))
+                image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                scale_back = original_width / new_w  # 仅当等比缩放时 w/h 比例一致
+                # 等比缩放时 scale_back 对 x/y 相同，直接用即可
+
         polygons = self._detect(image)
         results = []
         image_height, image_width = image.shape[:2]
@@ -167,11 +182,25 @@ class PPOCRv6ONNXAdapter:
 
             xs = polygon[:, 0]
             ys = polygon[:, 1]
-            bbox = sanitize_bbox(
+            # bbox 先归一到当前缩放图尺寸，再乘 scale_back 还原到原图坐标系
+            bbox_scaled = sanitize_bbox(
                 [xs.min(), ys.min(), xs.max(), ys.max()],
                 image_width,
                 image_height,
             )
+            bbox = [
+                int(round(bbox_scaled[0] * scale_back)),
+                int(round(bbox_scaled[1] * scale_back)),
+                int(round(bbox_scaled[2] * scale_back)),
+                int(round(bbox_scaled[3] * scale_back)),
+            ]
+            # 最终再夹一次，防止四舍五入越界
+            bbox = [
+                max(0, min(original_width - 1, bbox[0])),
+                max(0, min(original_height - 1, bbox[1])),
+                max(0, min(original_width - 1, bbox[2])),
+                max(0, min(original_height - 1, bbox[3])),
+            ]
             results.append(
                 {
                     "text": text,
